@@ -2,48 +2,121 @@
 (function(){
     "use strict";
     var count = 0;
-    window.Node = class Node
+    window.FSMNode = class FSMNode
     {
         constructor( o )
         {
+            configure(o);
+        }
+
+        configure(o)
+        {
+            console.assert( this.constructor.name != "FSMNode", 
+                    `This class constructor should not be called directly, use FSMNode.createNode( type, title, options ) instead.`, window.DEBUG );
+
             this.name = "unknown" + count++;
-            this.pos = vec2.create();
-            this.size = vec2.set(vec2.create(), 1,1);
+            this.pos =  vec2.create();
+            this.size = vec2.clone(FSMNode.NODE_DEFAULT_SIZE);
             this.type = "default";
-            
-            if(o)
-                this.configure( o );
-        }
 
-        configure( o = {} )
-        {
             Object.assign( this, o );
-
-            this.name = this.name || "unknown" + count++;
-            this.size = this.size || [120,30];
-
         }
 
-        serialize()
+        onEnter ( fsm ) {}
+        onExit  ( fsm ) {}
+        onUpdate( fsm, deltaTime ) {}
+
+        //=======================================================================
+        //  Node Types
+        //=======================================================================
+        static createNode( type, title, options = {} )
         {
-            let data = {};
-            Object.assign(data, this);
-            return data;
+            type = type || options.type || "default";
+
+            console.assert(FSMNode.NODE_TYPES[type], `Unable to instance a new node of type: ${type}. Type not registered`,window.DEBUG); 
+
+            if(title)
+                options.name = title;
+            let node = new FSMNode.NODE_TYPES[type](options);
+
+            return node;
         }
 
-        onEnter( dt )
-        {}
+        static registerNodeType( type, base_class )
+        {
+            console.assert( type && type.constructor.name == "String" && type.length > 0, 
+                            `Invalid node type name: ${type}`, window.DEBUG);
+            console.assert( base_class && base_class.constructor && base_class.constructor.name == "Function", 
+                            `Invalid node base class: ${base_class}`, window.DEBUG);
+            console.assert( !FSMNode.NODE_TYPES[type], 
+                            `node type already registered: ${type}`, window.DEBUG);
 
-        onUpdate( dt )
-        {}
+            let pos         = type.lastIndexOf("/");
+            let categories  = type.split("/");
+            let classname   = base_class.prototype.constructor.name;
 
-        onExit( dt )
-        {}
-        
+            base_class.type = type;
+            base_class.category = type.substr(0, pos);
+            base_class.title = base_class.title || classname;
+
+            //extend class
+            let properties = Object.getOwnPropertyNames(FSMNode.prototype);
+            for (let i in properties)
+            {
+                //Copy only those has not been already declared in the base_class class
+                if (!base_class.prototype[properties[i]])
+                base_class.prototype[properties[i]] = FSMNode.prototype[properties[i]];
+            }
+
+            FSMNode.NODE_TYPES[ type ] = base_class;
+        }
+
+
+        //=======================================================================
+        //  Node Widgets //TODO: WIP
+        //=======================================================================
+        addWidget( widget )
+        {
+            console.assert( widget , `Tried to add a invalid widget: ${widget}`,window.DEBUG);
+
+            this.widgets = this.widgets || [];
+            this.widgets[widget.name] = widget;
+        }
+
+        static createWidget( type, options )
+        {
+            console.assert(FSMNode.WIDGET_TYPES[type], `Widget type not found: ${type}`,window.DEBUG);
+
+            return new FSMNode.WIDGET_TYPES[type](options);
+        }
+
+        static registerNodeWidget( name, base_class )
+        {
+            name = name || base_class.name;
+            console.assert( name && name.constructor.name == "String" && name.length > 0, 
+                            `Invalid widget name: ${name}`, window.DEBUG);
+            console.assert( base_class && base_class.constructor && base_class.constructor.name == "Function", 
+                            `Invalid widget class: ${base_class}`, window.DEBUG);
+            
+            FSMNode.WIDGETS = FSMNode.WIDGETS || [];
+            FSMNode.WIDGETS[name] = base_class;
+        }
+
+
+        //=======================================================================
+        //  Node Render
+        //=======================================================================
+        draw( ctx, fgcolor, bgcolor, selected, mouse_over )
+        {
+            let fn = this.onDraw || this._on_draw_;
+            fn.call( this, ctx, fgcolor, bgcolor, selected, mouse_over );
+        }
+
         _on_draw_( ctx, fgcolor, bgcolor, selected, mouse_over )
         {
-            let title_height = Node.NODE_TITLE_HEIGHT;
-            let shape_radius = Node.NODE_SHAPE_RADIUS
+            let title_height = FSMNode.NODE_TITLE_HEIGHT;
+            let shape_radius = FSMNode.NODE_SHAPE_RADIUS
+            let boxcolor = this._boxcolor || FSMNode.NODE_DEFAULT_BOXCOLOR;
             let old_alpha = ctx.globalAlpha;
             let box_size = 10;
             let measure = ctx.measureText(this.name).width;
@@ -83,7 +156,7 @@
                 );
                 ctx.fill();
 
-                ctx.fillStyle = this._boxcolor || Node.NODE_DEFAULT_BOXCOLOR;
+                ctx.fillStyle = boxcolor;
                 ctx.beginPath();
                 ctx.arc(
                     title_height * 0.5,
@@ -107,58 +180,33 @@
             //Draw Title Text
             {
                 ctx.font = this.title_text_font;
-                var title = this.name || "State"
+                let title = this.name || "State"
                 //ctx.globalCompositeOperation = "difference";
                 ctx.fillStyle = bgcolor;//"white";
-                var old_filter = ctx.filter;
+                let old_filter = ctx.filter;
                 ctx.filter = "saturate(0%) invert(100%)";
 
-                //var measure = ctx.measureText(title);
                 ctx.globalAlpha = old_alpha;
                 ctx.textAlign = "left";
                 ctx.fillText(
                     capitalize(title),
                     title_height,
-                    Node.NODE_TITLE_TEXT_Y - title_height
+                    FSMNode.NODE_TITLE_TEXT_Y - title_height
                 );
                 ctx.filter = "none";
             }
             
         }
 
-        draw( ctx, fgcolor, bgcolor, selected, mouse_over )
-        {
-            let fn = this.onDraw || this._on_draw_;
-            fn.call( this, ctx, fgcolor, bgcolor, selected, mouse_over );
-        }
 
-        addWidget( type, options )
-        {
-            this.widgets = this.widgets || [];
-
-            if(!Node.WIDGETS[type]) throw("widget type not found");
-
-            let widget = new Node.WIDGETS[type](options);
-
-        }
-
-        static registerNodeWidget( name, base_class )
-        {
-            Node.WIDGETS = Node.WIDGETS || [];
-            Node.WIDGETS[name] = base_class;
-        }
-    
     }
-    Node.SHAPE = Enum(
-        "BOX",
-        "ROUND",
-        "CIRCLE",
-        "CARD",
-        "ARROW"
-    );
-    Node.NODE_TITLE_HEIGHT = 30;
-    Node.NODE_SHAPE_RADIUS = 8;
-    Node.NODE_DEFAULT_BOXCOLOR = "#666";
-    Node.NODE_TITLE_TEXT_Y = 20;
+
+    FSMNode.NODE_TITLE_HEIGHT = 30;
+    FSMNode.NODE_SHAPE_RADIUS = 8;
+    FSMNode.NODE_DEFAULT_BOXCOLOR = "#666";
+    FSMNode.NODE_TITLE_TEXT_Y = 20;
+    FSMNode.NODE_DEFAULT_SIZE = vec2.set(vec2.create(), 120,30);
+    FSMNode.NODE_TYPES = {};
+    FSMNode.WIDGET_TYPES = {};
 
 })();

@@ -5,7 +5,7 @@
             this.configure(o);
         }
     }
-    FSM.registerNodeType( "default", defaultNode );
+    FSMNode.registerNodeType( "default", defaultNode );
     
     class playAnimation{
         constructor(o){
@@ -17,13 +17,13 @@
             
         }
     }
-    FSM.registerNodeType( "animation/playAnimation", playAnimation );
+    FSMNode.registerNodeType( "animation/playAnimation", playAnimation );
 
     class blendTreeAnimation{
         constructor(o){
             this.configure(o);
         }
     }
-    FSM.registerNodeType( "animation/playAnimation", blendTreeAnimation );
+    FSMNode.registerNodeType( "animation/blendTreeAnimation", blendTreeAnimation );
 
 })();

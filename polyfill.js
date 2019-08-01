@@ -76,6 +76,7 @@ var Stack = (()=>{
   
   return Stack;
   
+  
 })();
 
 console.assert	= function(cond, text, dontThrow){

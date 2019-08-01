@@ -2,30 +2,38 @@
 (function(){
     "use strict";
     var ID = 0;
-    window.Transition = class Transition
+    window.FSMTransition = class FSMTransition
     {
         constructor( o )
         {
-            
+            //param:"speed", operator: "<", value:0.60, isReference: false 
+
             this.id = ID++;
             this.from = "";
-            this.to = "";
+            this.to   = "";
+            this.conditions = [];
+            //this.param= "";
+            //this.operator = "=="; //<,<=,>,>=,==,!=
+            //this.value = 0;
+            //this.isReference = false; //If you want to compare to another var of the same type in the same context;
 
-            if(o)
-                this.configure( o );
-        }
-
-        configure( o = {} )
-        {
             Object.assign( this, o );
         }
 
-        serialize()
+        check( fsm )
         {
-            let data = {};
-            return data;
+
         }
 
+        //=======================================================================
+        //  Transition Render
+        //=======================================================================
+        draw( ctx, fsm )
+        {
+            let fn = this.onDraw || this._on_draw;
+            fn.call( this, ctx, fsm );
+        }
+        
         _on_draw( ctx, fsm )
         {
 
@@ -84,12 +92,6 @@
             ctx.lineTo(p3[0],p3[1]);
             ctx.lineTo(p1[0],p1[1]);
             ctx.fill();
-        }
-
-        draw( ctx, fsm )
-        {
-            let fn = this.onDraw || this._on_draw;
-            fn.call( this, ctx, fsm );
         }
     }
 

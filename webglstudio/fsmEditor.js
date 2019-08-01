@@ -307,9 +307,12 @@
                 this.adjustMouseEvent(e);
                 let node = this.getNodeOnPos(e.canvasX, e.canvasY, this.visible_nodes, 5);
 
-                if(node && node.name != nodeA)
+                console.assert(node.name != "any", `The "any" state only accepts outgoing transitions`, window.DEBUG);
+
+                if(node && node.name != nodeA && node.name != "any")
                 {
-                    this.fsm.createTransition(nodeA, node.name);
+                    let transition = new FSMTransition({ from: nodeA, to: node.name});
+                    this.fsm.addTransition( transition );
                 }
                 delete this._temp_transition;
                 this.canvas.removeEventListener("mousedown",  this._create_transition_callback, true);
@@ -362,7 +365,8 @@
             }else{ //Any other place in canvas
                 actions = actions.concat([
                     { title: "Create Node", callback: _=> {
-                        this.fsm.createNode("animation/playAnimation", null, {pos:[event.canvasX, event.canvasY],size:[120,30]})
+                        let node = FSMNode.createNode("animation/playAnimation", null, {pos:[event.canvasX, event.canvasY],size:[120,30]});
+                        this.fsm.addNode( node );
                     }},
                     { title: "Clear Graph", callback: async _=>{
 
@@ -455,58 +459,57 @@
                         //t.hover = this.isPointInsideWideLine( this.mouse[0], this.mouse[1], from, to, 3);
                         t.selected = this.selectedTransitions.includes( t ) || false;
                     }
-
-                    //Draw the temporal transition while is being created
-                    if(this._temp_transition && this.fsm.states[this._temp_transition])
-                    {
-
-                        let from = this.fsm.states[this._temp_transition].pos;
-                        let to   = this.mouse;
-                        
-                        let tmpV3 = vec3.create();
-                        let dir = vec2.normalize(tmpV3,vec2.sub(tmpV3, to, from));
-                        vec3.mul(tmpV3, [5, 5, 5], vec3.cross(tmpV3, dir, [0, 0, 1]));
-                        from = vec2.add(vec2.create(), from, tmpV3);
-                        
-
-                        ctx.strokeStyle = "rgb(155, 155, 155)"; 
-                        ctx.fillStyle = "rgb(155, 155, 155)";
-
-                        //Draw the line
-                        {
-                            ctx.beginPath();
-                            ctx.moveTo( from[0], from[1] );
-                            ctx.lineTo( to[0],   to[1]   );
-                            ctx.stroke();
-                        }
-                        
-                        //Draw direction triangle
-                        {
-                            let dir = [(to[0]-from[0])*.5,(to[1]-from[1])*.5];
-                            let p = vec2.add(vec2.create(), [from[0],from[1]], dir);
-                            
-                            let front = vec2.normalize(vec2.create(), dir);     vec2.mul(front, front, [3,3]);
-                            let right = vec2.normalize(vec2.create(), tmpV3);   vec2.mul(right, right, [3,3]);
-                            
-                            let p1,p2,p3;
-                            p1 = vec2.add(vec2.create(), p, front);
-                            p2 = vec2.sub(vec2.create(), p, front);
-                            p3 = vec2.sub(vec2.create(), p, front);
-                            vec2.add( p2, p2, right);
-                            vec2.sub( p3, p3, right);
-                            
-                            ctx.beginPath();
-                            ctx.moveTo(p1[0],p1[1]);
-                            ctx.lineTo(p2[0],p2[1]);
-                            ctx.lineTo(p3[0],p3[1]);
-                            ctx.lineTo(p1[0],p1[1]);
-                            ctx.fill();
-                        }
-
-                    }
-
                     t.draw( this.ctx, this.fsm );
                 }
+
+                 //Draw the temporal transition while is being created
+                 if(this._temp_transition && this.fsm.states[this._temp_transition])
+                 {
+
+                     let from = this.fsm.states[this._temp_transition].pos;
+                     let to   = this.mouse;
+                     
+                     let tmpV3 = vec3.create();
+                     let dir = vec2.normalize(tmpV3,vec2.sub(tmpV3, to, from));
+                     vec3.mul(tmpV3, [5, 5, 5], vec3.cross(tmpV3, dir, [0, 0, 1]));
+                     from = vec2.add(vec2.create(), from, tmpV3);
+                     
+
+                     ctx.strokeStyle = "rgb(155, 155, 155)"; 
+                     ctx.fillStyle = "rgb(155, 155, 155)";
+
+                     //Draw the line
+                     {
+                         ctx.beginPath();
+                         ctx.moveTo( from[0], from[1] );
+                         ctx.lineTo( to[0],   to[1]   );
+                         ctx.stroke();
+                     }
+                     
+                     //Draw direction triangle
+                     {
+                         let dir = [(to[0]-from[0])*.5,(to[1]-from[1])*.5];
+                         let p = vec2.add(vec2.create(), [from[0],from[1]], dir);
+                         
+                         let front = vec2.normalize(vec2.create(), dir);     vec2.mul(front, front, [3,3]);
+                         let right = vec2.normalize(vec2.create(), tmpV3);   vec2.mul(right, right, [3,3]);
+                         
+                         let p1,p2,p3;
+                         p1 = vec2.add(vec2.create(), p, front);
+                         p2 = vec2.sub(vec2.create(), p, front);
+                         p3 = vec2.sub(vec2.create(), p, front);
+                         vec2.add( p2, p2, right);
+                         vec2.sub( p3, p3, right);
+                         
+                         ctx.beginPath();
+                         ctx.moveTo(p1[0],p1[1]);
+                         ctx.lineTo(p2[0],p2[1]);
+                         ctx.lineTo(p3[0],p3[1]);
+                         ctx.lineTo(p1[0],p1[1]);
+                         ctx.fill();
+                     }
+
+                 }
             }
             
             //Render States
@@ -529,6 +532,8 @@
                         FSMEditor.NODE_DEFAULT_BGCOLOR;
                     var selected = this.selectedNodes.includes( state ) || false;
                     var mouse_over = false;
+
+                    state.selected = selected;
 
                     ctx.save();
                     ctx.translate(state.pos[0] - state.size[0]*0.5, state.pos[1] - (state.size[1]-30)*0.5);
@@ -614,7 +619,6 @@
         /*************************************************************
          *  FSM related Functions
          ************************************************************/
-
         setFSM( fsm )
         {
             console.log( fsm );
@@ -747,130 +751,6 @@
     FSMEditor.NODE_CURRENT_NODE_COLOR = "#ff9400";
     //FSMEditor.NODE_STARTING_NODE_COLOR = "#9f6619";
     FSMEditor.DEFAULT_SHADOW_COLOR = "rgba(0,0,0,0.5)";
-
-    
-
-    LGraphCanvas.prototype.getCanvasMenuOptions = function() {
-        var options = null;
-        if (this.getMenuOptions) {
-            options = this.getMenuOptions();
-        } else {
-            options = [
-                {
-                    content: "Add Node",
-                    has_submenu: true,
-                    callback: LGraphCanvas.onMenuAdd
-                },
-                { content: "Add Group", callback: LGraphCanvas.onGroupAdd }
-                //{content:"Collapse All", callback: LGraphCanvas.onMenuCollapseAll }
-            ];
-
-            if (this._graph_stack && this._graph_stack.length > 0) {
-                options.push(null, {
-                    content: "Close subgraph",
-                    callback: this.closeSubgraph.bind(this)
-                });
-            }
-        }
-
-        if (this.getExtraMenuOptions) {
-            var extra = this.getExtraMenuOptions(this, options);
-            if (extra) {
-                options = options.concat(extra);
-            }
-        }
-
-        return options;
-    };
-
-    LGraphCanvas.prototype.processContextMenu = function(node, event) {
-        var that = this;
-        var canvas = LGraphCanvas.active_canvas;
-        var ref_window = canvas.getCanvasWindow();
-
-        var menu_info = null;
-        var options = {
-            event: event,
-            callback: inner_option_clicked,
-            extra: node
-        };
-
-		if(node)
-			options.title = node.type;
-
-        //check if mouse is in input
-
-        if (node) {
-            slot = node.getSlotInPosition(event.canvasX, event.canvasY);
-            LGraphCanvas.active_node = node;
-        }
-
-        
-        if (node) {
-            //on node
-            menu_info = this.getNodeMenuOptions(node);
-        } else {
-            menu_info = this.getCanvasMenuOptions();
-            var group = this.graph.getGroupOnPos(
-                event.canvasX,
-                event.canvasY
-            );
-        }
-        
-        var menu = new LiteGraph.ContextMenu(menu_info, options, ref_window);
-
-        function inner_option_clicked(v, options, e) {
-            if (!v) {
-                return;
-            }
-
-            if (v.content == "Remove Slot") {
-                var info = v.slot;
-                if (info.input) {
-                    node.removeInput(info.slot);
-                } else if (info.output) {
-                    node.removeOutput(info.slot);
-                }
-                return;
-            } else if (v.content == "Disconnect Links") {
-                var info = v.slot;
-                if (info.output) {
-                    node.disconnectOutput(info.slot);
-                } else if (info.input) {
-                    node.disconnectInput(info.slot);
-                }
-                return;
-            } else if (v.content == "Rename Slot") {
-                var info = v.slot;
-                var slot_info = info.input
-                    ? node.getInputInfo(info.slot)
-                    : node.getOutputInfo(info.slot);
-                var dialog = that.createDialog(
-                    "<span class='name'>Name</span><input autofocus type='text'/><button>OK</button>",
-                    options
-                );
-                var input = dialog.querySelector("input");
-                if (input && slot_info) {
-                    input.value = slot_info.label || "";
-                }
-                dialog
-                    .querySelector("button")
-                    .addEventListener("click", function(e) {
-                        if (input.value) {
-                            if (slot_info) {
-                                slot_info.label = input.value;
-                            }
-                            that.setDirty(true);
-                        }
-                        dialog.close();
-                    });
-            }
-
-            //if(v.callback)
-            //	return v.callback.call(that, node, options, e, menu, that, event );
-        }
-    };
-
 
     //Scale and Offset
     function DragAndScale(element, skip_events) {

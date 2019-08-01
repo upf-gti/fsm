@@ -62,12 +62,12 @@
         document.head.appendChild( ref );*/
 
 
-        if(LS)
+        /*if(LS)
         {
             if(LS.Components["FSM"])
             LS.unregisterComponent("FSM");
             LS.registerComponent( FSM );
-        } 
+        } */
 
         console.log("FSM ready to go!");
     })

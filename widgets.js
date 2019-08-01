@@ -31,6 +31,6 @@
         onMouseDown(e)  {  }
         onMouseMove(e)  {  }
     }
-    Node.registerNodeWidget("progressBar",progressBar);
+    FSMNode.registerNodeWidget("progressBar",progressBar);
 
 })();
