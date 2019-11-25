@@ -1,5 +1,14 @@
-//@fsmWidget
-(function(){
+(_=>{
+
+    /***
+     * ███████╗███████╗███╗   ███╗    ██╗    ██╗██╗██████╗  ██████╗ ███████╗████████╗
+     * ██╔════╝██╔════╝████╗ ████║    ██║    ██║██║██╔══██╗██╔════╝ ██╔════╝╚══██╔══╝
+     * █████╗  ███████╗██╔████╔██║    ██║ █╗ ██║██║██║  ██║██║  ███╗█████╗     ██║   
+     * ██╔══╝  ╚════██║██║╚██╔╝██║    ██║███╗██║██║██║  ██║██║   ██║██╔══╝     ██║   
+     * ██║     ███████║██║ ╚═╝ ██║    ╚███╔███╔╝██║██████╔╝╚██████╔╝███████╗   ██║   
+     * ╚═╝     ╚══════╝╚═╝     ╚═╝     ╚══╝╚══╝ ╚═╝╚═════╝  ╚═════╝ ╚══════╝   ╚═╝   
+     */
+
     "use strict";
 
     window.FSMWidget = class FSMWidget
@@ -11,8 +20,9 @@
             this.init(o);
         }
 
-        init( o = {} )
+        init( o )
         {
+            o = o || {};
             this.root = LiteGUI.createElement(
                 "div", 
                 o.class, 
@@ -45,6 +55,9 @@
         //Events---------------------------------------------------------------------------
         bindEvents()
         {
+            this._resizefunc = this.resize.bind(this);
+            window.addEventListener('resize', this._resizefunc);
+
             if (!this._ondraw_func)
                 this._ondraw_func = this.draw.bind(this);
     
@@ -54,6 +67,7 @@
         unbindEvents()
         {
             console.assert(LS);
+            window.removeEventListener('resize', this._resizefunc);
 
             LEvent.unbindAll(LS.GlobalScene, this);
             LEvent.unbindAll(LS, this);

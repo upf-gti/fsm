@@ -1,5 +1,14 @@
-//@fsmEditor
-(function(){
+(_=>{
+
+    /*** 
+     * ███████╗███████╗███╗   ███╗    ███████╗██████╗ ██╗████████╗ ██████╗ ██████╗ 
+     * ██╔════╝██╔════╝████╗ ████║    ██╔════╝██╔══██╗██║╚══██╔══╝██╔═══██╗██╔══██╗
+     * █████╗  ███████╗██╔████╔██║    █████╗  ██║  ██║██║   ██║   ██║   ██║██████╔╝
+     * ██╔══╝  ╚════██║██║╚██╔╝██║    ██╔══╝  ██║  ██║██║   ██║   ██║   ██║██╔══██╗
+     * ██║     ███████║██║ ╚═╝ ██║    ███████╗██████╔╝██║   ██║   ╚██████╔╝██║  ██║
+     * ╚═╝     ╚══════╝╚═╝     ╚═╝    ╚══════╝╚═════╝ ╚═╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
+     */                                                                                            
+
     "use strict";
 
     window.FSMEditor = class FSMEditor
@@ -148,7 +157,7 @@
                         let from = vec2.add(vec2.create(), t._from, t._t);
                         let to   = vec2.add(vec2.create(), t._to,   t._t);
 
-                        t.hover = this.isPointInsideWideLine( e.canvasX, e.canvasY, from, to, 3) && !this.getNodeOnPos(e.canvasX, e.canvasY, [this.fsm.states[t.from],this.fsm.states[t.to]], 0);
+                        t._hover = this.isPointInsideWideLine( e.canvasX, e.canvasY, from, to, 3) && !this.getNodeOnPos(e.canvasX, e.canvasY, [this.fsm.states[t.from],this.fsm.states[t.to]], 0);
                     }
                 }
     
@@ -193,6 +202,7 @@
             let transition = this.getTransitionOnPos(e.canvasX, e.canvasY, null, 3);
             let now = LiteGraph.getTime();
             let is_double_click = now - this.last_mouseclick < 300;
+            this.last_mouseclick = now;
 
             //this.mouse[0] = e.canvasX;
             //this.mouse[1] = e.canvasY;
@@ -217,6 +227,11 @@
                         if(this.selectedNodes.length)this.selectedNodes = [];
                         this.selectedTransitions.push( transition );
                     }
+
+                         if(is_double_click && node)         EditorModule.inspect( Object.assign(node, {_fsm:this.fsm}) );
+                    else if(is_double_click && transition)   EditorModule.inspect( Object.assign(transition, {_fsm:this.fsm}) ); 
+                    else if(is_double_click)                 EditorModule.inspect( this.fsm ); 
+
 
                     break;
                 }
@@ -260,10 +275,18 @@
 
             switch( e.key ){
                 case "Delete": {
+                    e.stopPropagation();
                     this.removeNodes( this.selectedNodes );
                     this.removeTransitions( this.selectedTransitions );
                     this.selectedNodes = [];
                     this.selectedTransitions = [];
+                    break;
+                }
+
+                case "Escape":
+                {
+                    EditorModule.inspect( this.fsm );
+                    break;
                 }
             }
         }
@@ -281,45 +304,123 @@
             if(!Array.isArray(nodes))
                 return console.error(`removeNodes expects an array of nodes`);
 
-            for(var i in nodes)
-                this.fsm.removeNode( nodes[i].name );
+            var has_changed = 0;
+            for(var i in nodes){
+                if(Object.values(FSMNode.NODE_TYPES).includes(nodes[i].constructor))
+                    has_changed |= this.fsm.removeNode( nodes[i].id );
+                else
+                    has_changed |= this.fsm.removeNode( nodes[i] );
+            }
+                
+
+            if(has_changed){
+                LS.RM.resourceModified(this.fsm);
+                if(EditorModule && EditorModule.inspector)
+                    EditorModule.inspector.onRefresh()
+            }
         }
 
         removeTransitions( transitions )
         {
             if(!Array.isArray(transitions))
-                return console.error(`removeTransition expects an array of transitions`);
-
+            return console.error(`removeTransition expects an array of transitions`);
+            
+            var has_changed = 0;
             for(var i in transitions )
-                this.fsm.removeTransition( transitions[i].id );
+            {
+                if(transitions[i].constructor.name == "FSMTransition")
+                    has_changed |= this.fsm.removeTransition( transitions[i].id );
+                else
+                    has_changed |= this.fsm.removeTransition( transitions[i] );
+            }
+            
+            if(has_changed){
+                LS.RM.resourceModified(this.fsm);
+                if(EditorModule && EditorModule.inspector)
+                    EditorModule.inspector.onRefresh()
+            }
+        }
+        
+        createNode(type, name, options)
+        {
+            let node = FSMNode.createNode(type, name, options);
+            if(node){
+                this.fsm.addNode( node );
+                LS.RM.resourceModified(this.fsm);
+                if(EditorModule && EditorModule.inspector){
+                    EditorModule.inspector.inspect(node);
+                }
+            }
         }
 
-        createTransition( nodeA )
+        setDefault( id )
         {
+            let node = this.fsm.states[id];
+            if(!node) 
+                return;
+
+            this.fsm.default = id;
+            LS.RM.resourceModified(this.fsm);
+        }
+
+        createTransition( nodeID )
+        {
+            
+
             this.canvas.removeEventListener("mousedown",    this._mousedown_callback);
             
             this.selectedNodes = [];
             this.selectedTransitions = [];
 
-            this._temp_transition = nodeA;
+            this._temp_transition = nodeID;
 
-            this._create_transition_callback = ( e => {
+            this._create_transition_callback = ( e => 
+            {
                 this.adjustMouseEvent(e);
                 let node = this.getNodeOnPos(e.canvasX, e.canvasY, this.visible_nodes, 5);
+                if(!node) return;
 
                 console.assert(node.name != "any", `The "any" state only accepts outgoing transitions`, window.DEBUG);
 
-                if(node && node.name != nodeA && node.name != "any")
+                if(node && node.id != nodeID && node.name != "any")
                 {
-                    let transition = new FSMTransition({ from: nodeA, to: node.name});
+                    let transition = new FSMTransition({ from: nodeID, to: node.id});
                     this.fsm.addTransition( transition );
+                    if(EditorModule && EditorModule.inspector)
+                        EditorModule.inspector.inspect(transition);
                 }
                 delete this._temp_transition;
+
+                document.addEventListener("keydown",this._key_callback,true);
+                document.addEventListener("keyup",  this._key_callback,true);
+                document.removeEventListener("keydown",   this._cancel_create_transition_callback);
+
                 this.canvas.removeEventListener("mousedown",  this._create_transition_callback, true);
                 this.canvas.addEventListener("mousedown",     this._mousedown_callback, true);
+
+                LS.RM.resourceModified(this.fsm);
+               
                 
             }).bind(this);
 
+            this._cancel_create_transition_callback = ( e => 
+            {
+                delete this._temp_transition
+
+                document.addEventListener("keydown",this._key_callback,true);
+                document.addEventListener("keyup",  this._key_callback,true);
+                document.removeEventListener("keydown",   this._cancel_create_transition_callback);
+
+                this.canvas.removeEventListener("mousedown",  this._create_transition_callback, true);
+                this.canvas.addEventListener("mousedown",     this._mousedown_callback, true);
+            }).bind(this);
+
+
+            document.removeEventListener("keydown",this._key_callback);
+            document.removeEventListener("keyup",  this._key_callback);
+            document.addEventListener("keydown",   this._cancel_create_transition_callback, true);
+
+            this.canvas.removeEventListener("mousedown",     this._mousedown_callback);
             this.canvas.addEventListener("mousedown",     this._create_transition_callback, true);
         }
 
@@ -354,19 +455,19 @@
 
             if(node){
                 actions = actions.concat([
-                    { title: "Create Transition", callback: _=> this.createTransition( node.name ) },
-                    { title: "Set Default", callback: _=> this.fsm.default = node.name },
-                    { title: "Remove Node", callback: _=> this.fsm.removeNode(node.name) },
+                    { title: "Create Transition", callback: _=> this.createTransition( node.id ) },
+                    { title: "Set Default", callback: _=> this.setDefault(node.id) },
+                    { title: "Remove Node", callback: _=> this.removeNodes([node.id]) },
                 ]);
             }else if( transition ){
                 actions = actions.concat([
-                    { title: "Remove Transition", callback: _=> this.fsm.removeTransition( transition.id ) },
+                    { title: "Remove Transition", callback: _=> this.removeTransitions( [transition.id] ) },
                 ]);
             }else{ //Any other place in canvas
                 actions = actions.concat([
                     { title: "Create Node", callback: _=> {
-                        let node = FSMNode.createNode("animation/playAnimation", null, {pos:[event.canvasX, event.canvasY],size:[120,30]});
-                        this.fsm.addNode( node );
+                        this.createNode("animation/playAnimation", null, {pos:[event.canvasX, event.canvasY],size:[120,30]});
+                        
                     }},
                     { title: "Clear Graph", callback: async _=>{
 
@@ -457,7 +558,7 @@
                         let from = vec2.add(vec2.create(), t._from, t._t);
                         let to   = vec2.add(vec2.create(), t._to,   t._t);
                         //t.hover = this.isPointInsideWideLine( this.mouse[0], this.mouse[1], from, to, 3);
-                        t.selected = this.selectedTransitions.includes( t ) || false;
+                        t._selected = this.selectedTransitions.includes( t ) || false;
                     }
                     t.draw( this.ctx, this.fsm );
                 }
@@ -525,15 +626,15 @@
                         state.constructor.color ||
                         FSMEditor.NODE_DEFAULT_COLOR;
                     var bgcolor =
-                        (this.fsm.current == state.name? FSMEditor.NODE_CURRENT_NODE_COLOR : null) ||
-                        (this.fsm.default == state.name? FSMEditor.NODE_STARTING_NODE_COLOR : null) ||
+                        (this.fsm._current == state.id? FSMEditor.NODE_CURRENT_NODE_COLOR : null) ||
+                        (this.fsm.default  == state.id? FSMEditor.NODE_STARTING_NODE_COLOR : null) ||
                         state.bgcolor ||
                         state.constructor.bgcolor ||
                         FSMEditor.NODE_DEFAULT_BGCOLOR;
                     var selected = this.selectedNodes.includes( state ) || false;
                     var mouse_over = false;
 
-                    state.selected = selected;
+                    state._selected = selected;
 
                     ctx.save();
                     ctx.translate(state.pos[0] - state.size[0]*0.5, state.pos[1] - (state.size[1]-30)*0.5);
